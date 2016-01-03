@@ -71,7 +71,7 @@ func (m *Merchant) ParseRequest(res []byte) (Params, error) {
 	return resp, nil
 }
 
-func (m *Merchant) BizRequest(url, method, notifyUrl string, bizData map[string]string) ([]byte, error)  {
+func (m *Merchant) BizRequest(url, method, notifyUrl string, bizData map[string]string) ([]byte, error) {
 	bizContent, err := json.Marshal(bizData)
 	if err != nil {
 		return nil, err
@@ -102,76 +102,76 @@ func (m *Merchant) BizRequest(url, method, notifyUrl string, bizData map[string]
 
 // 预下单API, amount单位为分
 // https://app.alipay.com/market/document.htm?name=saomazhifu#page-14
-func (m *Merchant) PlaceOrder(orderId, goodsname, desc, clientIp, notifyUrl string, amount int64) (PlaceOrderResult, error) {
+func (m *Merchant) PlaceOrder(orderId, goodsname, desc, clientIp, notifyUrl string, amount int64) ([]byte, PlaceOrderResult, error) {
 	data, err := m.BizRequest(gatewayUrl, "alipay.trade.precreate", notifyUrl, map[string]string{
 		"out_trade_no": orderId,                                  // 商户订单号
 		"total_amount": fmt.Sprintf("%.2f", float64(amount)/100), // 总金额
 		"subject":      goodsname,                                // 商品名称
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var resp PlaceOrderResponse
 	err = json.Unmarshal(data, &resp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	enc := strings.TrimPrefix(string(data), `{"alipay_trade_precreate_response":{`)
 	idx := strings.Index(enc, `},"sign":`)
 	if idx == -1 {
-		return nil, errors.New("支付宝返回错误")
+		return nil, nil, errors.New("支付宝返回错误")
 	}
 
-	enc = "{"+enc[:idx]+"}"
+	enc = "{" + enc[:idx] + "}"
 
 	err = Verify(m.aliPublicKey, []byte(enc), resp.Sign)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return resp.PlaceOrderResult, nil
+	return data, resp.PlaceOrderResult, nil
 }
 
 // 查询订单状态
 // https://app.alipay.com/market/document.htm?name=saomazhifu#page-15
-func (m *Merchant) QueryOrder(orderId string) (*PlaceOrderQueryResult, error) {
+func (m *Merchant) QueryOrder(orderId string) ([]byte, *PlaceOrderQueryResult, error) {
 	data, err := m.BizRequest(gatewayUrl, "alipay.trade.query", "", map[string]string{
-		"out_trade_no": orderId,                                  // 商户订单号
+		"out_trade_no": orderId, // 商户订单号
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var resp QueryOrderResponse
 	err = json.Unmarshal(data, &resp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	enc := strings.TrimPrefix(string(data), `{"alipay_trade_query_response":{`)
 	idx := strings.Index(enc, `},"sign":`)
 	if idx == -1 {
-		return nil, errors.New("支付宝返回错误")
+		return nil, nil, errors.New("支付宝返回错误")
 	}
 
-	enc = "{"+enc[:idx]+"}"
+	enc = "{" + enc[:idx] + "}"
 
 	//s := strings.Replace(string(enc), `/`, `\/`, -1)
 	err = Verify(m.aliPublicKey, []byte(enc), resp.Sign)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &resp.PlaceOrderQueryResult, nil
+	return data, &resp.PlaceOrderQueryResult, nil
 }
 
 // 撤销订单
 // https://app.alipay.com/market/document.htm?name=saomazhifu#page-16
 func (m *Merchant) CloseOrder(orderId string) error {
 	data, err := m.BizRequest(gatewayUrl, "alipay.trade.cancel", "", map[string]string{
-		"out_trade_no": orderId,                                  // 商户订单号
+		"out_trade_no": orderId, // 商户订单号
 	})
 	if err != nil {
 		return err
