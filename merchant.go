@@ -6,16 +6,45 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
 type Merchant struct {
-	AppId string
+	AppId  string
+	logger *log.Logger
 
 	privateKey   *rsa.PrivateKey
 	aliPublicKey *rsa.PublicKey
+}
+
+func (m *Merchant) Sign(data []byte) (string, error) {
+	return Sign(m.privateKey, data)
+}
+
+func (m *Merchant) Verify(data []byte, sig string) error {
+	return Verify(m.aliPublicKey, data, sig)
+}
+
+func (m *Merchant) Error(args ...interface{}) {
+	args = append([]interface{}{"[ERR]"}, args...)
+	m.logger.Println(args...)
+}
+
+func (m *Merchant) Errorf(format string, args ...interface{}) {
+	m.logger.Printf("[ERR]"+format, args...)
+}
+
+func (m *Merchant) Debug(args ...interface{}) {
+	args = append([]interface{}{"[DBG]"}, args...)
+	m.logger.Println(args...)
+}
+
+func (m *Merchant) Debugf(format string, args ...interface{}) {
+	m.logger.Printf("[DBG]"+format, args...)
 }
 
 func NewMerchant(appid string, prikeyPath, aliPublicKeyPath string) (*Merchant, error) {
@@ -30,6 +59,7 @@ func NewMerchant(appid string, prikeyPath, aliPublicKeyPath string) (*Merchant, 
 	}
 
 	return &Merchant{
+		logger:       log.New(os.Stdout, "["+appid+"]", log.LstdFlags),
 		AppId:        appid,
 		privateKey:   priKey,
 		aliPublicKey: aliPublicKey,
@@ -118,6 +148,8 @@ func (m *Merchant) PlaceOrder(orderId, goodsname, desc, clientIp, notifyUrl stri
 		return nil, nil, err
 	}
 
+	m.Debug("place order resp:", resp)
+
 	enc := strings.TrimPrefix(string(data), `{"alipay_trade_precreate_response":{`)
 	idx := strings.Index(enc, `},"sign":`)
 	if idx == -1 {
@@ -188,6 +220,8 @@ func (m *Merchant) CloseOrder(orderId string) error {
 	if idx == -1 {
 		return errors.New("支付宝返回错误")
 	}
+
+	enc = "{" + enc[:idx] + "}"
 
 	err = Verify(m.aliPublicKey, []byte(enc), resp.Sign)
 	if err != nil {
